@@ -15,13 +15,11 @@ return new class extends Migration
             $table->id();
             $table->uuid('request_log_id');
 
-            // model_id is a string (not a UUID) so both UUID and integer/string
-            // primary keys can be associated with a request log.
-            $table->string('model_type');
-            $table->string('model_id');
+            // UUID morph columns — aligns with the HasUuids primary keys this package
+            // and its hosts use. (Non-UUID-keyed models are simply not tracked; the
+            // listener tolerates the insert failing.)
+            $table->uuidMorphs('model');
             $table->timestamps();
-
-            $table->index(['model_type', 'model_id']);
 
             $table->foreign('request_log_id')
                 ->references('id')
