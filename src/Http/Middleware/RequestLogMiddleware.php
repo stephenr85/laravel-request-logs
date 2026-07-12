@@ -89,7 +89,7 @@ class RequestLogMiddleware
     {
         $requestData = [
             'headers' => array_map(fn ($values) => implode(PHP_EOL, $values), $request->headers->all()),
-            'body' => $request->all() ?: [],
+            'body' => $this->sanitizeBody($request->all() ?: []),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'api_version' => $request->header('Accept-Version', 'default'),
@@ -107,6 +107,54 @@ class RequestLogMiddleware
             'response' => ['body' => [], 'headers' => []], // Updated in completeRequestLogData
             'meta' => [], // Available for additional metadata
         ]);
+    }
+
+    /**
+     * Replace any uploaded-file object in the captured body with a serializable
+     * descriptor. `$request->all()` folds in uploaded files, which are SplFileInfo
+     * (Illuminate\Http\UploadedFile, or Illuminate\Http\Testing\File under test) and
+     * cannot be serialized. Because the completion listener is ShouldQueue, its payload
+     * carries this body into the queue serializer — a raw file crashes any logged
+     * multipart upload, on a real queue in production as well as in tests. A file body
+     * has no business in a request log anyway; a name/size/mime descriptor is what's useful.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    protected function sanitizeBody(array $body): array
+    {
+        array_walk_recursive($body, function (&$value) {
+            if ($value instanceof \SplFileInfo) {
+                $value = $this->describeFile($value);
+            }
+        });
+
+        return $body;
+    }
+
+    /**
+     * A serializable descriptor for an uploaded file — never the file object itself.
+     *
+     * @return array<string, mixed>
+     */
+    protected function describeFile(\SplFileInfo $file): array
+    {
+        $descriptor = ['__file__' => true];
+
+        if ($file instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
+            $descriptor['name'] = $file->getClientOriginalName();
+            $descriptor['mime'] = $file->getClientMimeType();
+        } else {
+            $descriptor['name'] = $file->getFilename();
+        }
+
+        try {
+            $descriptor['size'] = $file->getSize();
+        } catch (\Throwable) {
+            $descriptor['size'] = null;
+        }
+
+        return $descriptor;
     }
 
     /**

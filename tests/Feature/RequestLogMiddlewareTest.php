@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Rushing\RequestLogs\Data\RequestLogData;
@@ -67,6 +68,40 @@ test('middleware handles request and logs data correctly', function () {
         ->and($requestLog->api_version)->toBe('2.0')
         ->and($requestLog->response_status)->toBe(200)
         ->and($requestLog->is_error)->toBeFalse();
+});
+
+test('middleware keeps an uploaded-file request body serializable', function () {
+    // A multipart upload: Request::all() includes the UploadedFile object, which
+    // is an SplFileInfo and cannot be serialized. The CompleteRequestLogListener is
+    // ShouldQueue, so its payload (carrying RequestLogData) gets serialized — a raw
+    // file in the body crashes any logged upload (test AND production, on a real
+    // queue). The body must carry a serializable descriptor, never the file object.
+    $file = UploadedFile::fake()->create('guide.mid', 1, 'audio/midi');
+
+    $request = Request::create('/api/upload', 'POST', ['title' => 'song'], [], ['file' => $file]);
+    $request->headers->set('X-Request-Id', $this->requestId);
+
+    $response = new Response(json_encode(['ok' => true]), 200, ['Content-Type' => 'application/json']);
+
+    $this->middleware->handle($request, fn ($req) => $response);
+
+    $requestLogData = $request->attributes->get('requestLogData');
+
+    // The invariant the queue serializer needs: no SplFileInfo (UploadedFile /
+    // Testing\File) survives anywhere in the logged payload.
+    $hasFile = false;
+    array_walk_recursive($requestLogData->request, function ($value) use (&$hasFile) {
+        if ($value instanceof \SplFileInfo) {
+            $hasFile = true;
+        }
+    });
+    expect($hasFile)->toBeFalse('the logged request payload still carries a raw file object');
+
+    // The file survives as a descriptor, not the raw object, alongside scalar input.
+    $body = $requestLogData->request['body'];
+    expect($body)->toHaveKey('file')
+        ->and($body['file'])->toBeArray()
+        ->and($body['title'])->toBe('song');
 });
 
 test('middleware auto-generates a correlation id when the header is missing', function () {
