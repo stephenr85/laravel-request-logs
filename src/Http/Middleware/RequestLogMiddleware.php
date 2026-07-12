@@ -129,18 +129,7 @@ class RequestLogMiddleware
     public function storeRequestLog(RequestLogData $requestLogData): mixed
     {
         try {
-            $logData = [
-                'request_id' => $requestLogData->id,
-                'path' => parse_url($requestLogData->url, PHP_URL_PATH),
-                'method' => $requestLogData->method,
-                'api_version' => $requestLogData->request['api_version'] ?? 'default',
-                'request_at' => $requestLogData->request['timestamp'],
-                'response_at' => $requestLogData->response['timestamp'],
-                'response_status' => $requestLogData->statusCode,
-                'is_error' => ! $requestLogData->success,
-            ];
-
-            return $this->requestLogService->storeRequestLog($logData);
+            return $this->requestLogService->storeRequestLog($requestLogData->toRowArray());
         } catch (\Exception $e) {
             Log::error('Failed to store request log: '.$e->getMessage(), [
                 'exception' => $e,

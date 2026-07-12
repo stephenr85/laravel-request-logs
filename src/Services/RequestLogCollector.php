@@ -75,17 +75,7 @@ class RequestLogCollector
         $requestLogDataMap = []; // Map request_id to RequestLogData for event firing.
 
         foreach ($this->pendingLogs as $requestLogData) {
-            $logDataArray[] = [
-                'request_id' => $requestLogData->id,
-                'path' => parse_url($requestLogData->url, PHP_URL_PATH) ?: '/',
-                'method' => $requestLogData->method,
-                'api_version' => $requestLogData->request['api_version'] ?? 'default',
-                'request_at' => $requestLogData->request['timestamp'],
-                'response_at' => $requestLogData->response['timestamp'],
-                'response_status' => $requestLogData->statusCode,
-                'is_error' => ! $requestLogData->success,
-            ];
-
+            $logDataArray[] = $requestLogData->toRowArray();
             $requestLogDataMap[$requestLogData->id] = $requestLogData;
         }
 

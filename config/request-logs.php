@@ -14,10 +14,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | Configure request correlation/tracking for audit trails and model
-    | association. This provides request correlation, not idempotency
-    | (duplicate prevention). The default header is the conventional
-    | X-Request-Id; set `ensure_header` to false to only log requests that
-    | already carry a correlation ID.
+    | association. Correlation links a request to its log row and the models it
+    | touched — it does not deduplicate or block replayed requests. The default
+    | header is the conventional X-Request-Id; set `ensure_header` to false to
+    | only log requests that already carry a correlation ID.
     |
     */
     'correlation' => [
