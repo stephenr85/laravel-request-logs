@@ -1,0 +1,104 @@
+<?php
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Response as GuzzleResponse;
+use Rushing\RequestLogs\Http\Middleware\GuzzleRequestLogMiddleware;
+use Rushing\RequestLogs\Models\RequestLog;
+use Rushing\RequestLogs\Services\RequestLogCollector;
+
+beforeEach(function () {
+    $this->collector = app(RequestLogCollector::class);
+    $this->collector->clear();
+    $this->mock = new MockHandler;
+});
+
+function guzzleClient(MockHandler $mock): Client
+{
+    $stack = HandlerStack::create($mock);
+    $stack->push(app(GuzzleRequestLogMiddleware::class));
+
+    return new Client(['handler' => $stack]);
+}
+
+test('successful outbound calls are captured and tagged as outbound', function () {
+    $this->mock->append(new GuzzleResponse(200, ['Content-Type' => 'application/json'], json_encode(['ok' => true])));
+
+    guzzleClient($this->mock)->get('https://api.example.com/widgets');
+
+    $pending = $this->collector->getPendingLogs();
+    expect($pending)->toHaveCount(1);
+
+    $log = $pending[0];
+    expect($log->success)->toBeTrue()
+        ->and($log->statusCode)->toBe(200)
+        ->and($log->method)->toBe('GET')
+        ->and($log->meta['type'])->toBe('outbound')
+        ->and($log->meta['client'])->toBe('guzzle');
+});
+
+test('failed outbound calls are captured with the error status', function () {
+    $this->mock->append(new GuzzleResponse(500, ['Content-Type' => 'application/json'], json_encode(['error' => 'boom'])));
+
+    try {
+        guzzleClient($this->mock)->get('https://api.example.com/widgets');
+    } catch (RequestException $e) {
+        // Expected — Guzzle throws on 5xx by default.
+    }
+
+    $pending = $this->collector->getPendingLogs();
+    expect($pending)->toHaveCount(1);
+    expect($pending[0]->success)->toBeFalse()
+        ->and($pending[0]->statusCode)->toBe(500);
+});
+
+test('excluded hosts are not logged', function () {
+    config(['request-logs.outbound.exclude_hosts' => ['*.excluded.test']]);
+    $this->mock->append(new GuzzleResponse(200));
+
+    guzzleClient($this->mock)->get('https://api.excluded.test/thing');
+
+    expect($this->collector->getPendingLogs())->toBeEmpty();
+});
+
+test('a per-request skip option bypasses logging', function () {
+    $this->mock->append(new GuzzleResponse(200));
+
+    guzzleClient($this->mock)->get('https://api.example.com/widgets', ['request_logs_skip' => true]);
+
+    expect($this->collector->getPendingLogs())->toBeEmpty();
+});
+
+test('the correlation id is propagated to the outbound request headers', function () {
+    $this->mock->append(new GuzzleResponse(200));
+
+    guzzleClient($this->mock)->get('https://api.example.com/widgets');
+
+    $sent = $this->mock->getLastRequest();
+    expect($sent->getHeaderLine('X-Request-Id'))->not->toBe('');
+
+    // The captured log uses that same correlation id.
+    expect($this->collector->getPendingLogs()[0]->id)->toBe($sent->getHeaderLine('X-Request-Id'));
+});
+
+test('flushing the collector persists the outbound rows and fires the event', function () {
+    $this->mock->append(new GuzzleResponse(200, ['Content-Type' => 'application/json'], json_encode(['ok' => true])));
+
+    guzzleClient($this->mock)->get('https://api.example.com/widgets');
+
+    $this->collector->flushLogs();
+
+    expect(RequestLog::where('is_error', false)->count())->toBe(1);
+    expect($this->collector->getPendingLogs())->toBeEmpty();
+});
+
+test('outbound logging can be disabled entirely', function () {
+    config(['request-logs.outbound.enabled' => false]);
+    $this->mock->append(new GuzzleResponse(200));
+
+    guzzleClient($this->mock)->get('https://api.example.com/widgets');
+
+    expect($this->collector->getPendingLogs())->toBeEmpty();
+});
