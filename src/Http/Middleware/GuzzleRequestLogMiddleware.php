@@ -265,7 +265,13 @@ class GuzzleRequestLogMiddleware
      */
     protected function getRequestBody(RequestInterface $request): mixed
     {
-        $body = (string) $request->getBody();
+        // Rewind after reading: casting a PSR-7 stream to string leaves the pointer at EOF,
+        // so a client that reads the body after us (many SDKs do) would see an empty body.
+        $stream = $request->getBody();
+        $body = (string) $stream;
+        if ($stream->isSeekable()) {
+            $stream->rewind();
+        }
 
         if (empty($body)) {
             return [];
@@ -287,7 +293,13 @@ class GuzzleRequestLogMiddleware
      */
     protected function getResponseBody(ResponseInterface $response): mixed
     {
-        $body = (string) $response->getBody();
+        // Rewind after reading: casting a PSR-7 stream to string leaves the pointer at EOF,
+        // so a client that reads the body after us (many SDKs do) would see an empty body.
+        $stream = $response->getBody();
+        $body = (string) $stream;
+        if ($stream->isSeekable()) {
+            $stream->rewind();
+        }
 
         if (empty($body)) {
             return [];
