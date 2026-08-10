@@ -7,3 +7,4 @@
 /.ignore/
 .phpunit.result.cache
 composer.lock
+CLAUDE.md
