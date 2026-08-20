@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Rushing\SchemaConvergence\ConvergentTable;
 
 return new class extends Migration
 {
@@ -11,24 +12,37 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('request_log_models', function (Blueprint $table) {
-            $table->id();
-            $table->uuid('request_log_id');
+        // CONVERGENT guard (rushing/laravel-schema-convergence/docs/agents/convergent-migration-guards.convention.md):
+        // create when absent, top up when a copy already exists, throw when one exists with an
+        // incompatible column type.
+        //
+        // The FK below is DELIBERATELY left inside the definition and DELIBERATELY not converged. The
+        // converge path adds columns and plain/unique/full-text indexes only — a foreign key added to a
+        // table that already holds rows fails on the rows already there, so the utility declines it by
+        // design rather than by omission. Read that as: on a fresh create this table gets its cascade;
+        // on a converge onto a foreign copy of `request_log_models` it does not, and the orphan sweep
+        // that `cascadeOnDelete` buys is the host's to add as a deliberate migration. Nothing here
+        // silently half-applies — a converge that cannot reach the FK still reports what it did add.
+        ConvergentTable::named('request_log_models')
+            ->define(function (Blueprint $table) {
+                $table->id();
+                $table->uuid('request_log_id');
 
-            // UUID morph columns — aligns with the HasUuids primary keys this package
-            // and its hosts use. (Non-UUID-keyed models are simply not tracked; the
-            // listener tolerates the insert failing.)
-            $table->uuidMorphs('model');
-            $table->timestamps();
+                // UUID morph columns — aligns with the HasUuids primary keys this package
+                // and its hosts use. (Non-UUID-keyed models are simply not tracked; the
+                // listener tolerates the insert failing.)
+                $table->uuidMorphs('model');
+                $table->timestamps();
 
-            $table->foreign('request_log_id')
-                ->references('id')
-                ->on('request_logs')
-                ->cascadeOnDelete();
+                $table->foreign('request_log_id')
+                    ->references('id')
+                    ->on('request_logs')
+                    ->cascadeOnDelete();
 
-            // Prevent duplicate associations
-            $table->unique(['request_log_id', 'model_type', 'model_id'], 'unique_request_log_model');
-        });
+                // Prevent duplicate associations
+                $table->unique(['request_log_id', 'model_type', 'model_id'], 'unique_request_log_model');
+            })
+            ->assert();
     }
 
     /**

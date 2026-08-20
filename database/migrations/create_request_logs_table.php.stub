@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Rushing\SchemaConvergence\ConvergentTable;
 
 return new class extends Migration
 {
@@ -11,23 +12,28 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('request_logs', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-            $table->string('request_id')->unique()->index();
-            $table->string('path');
-            $table->string('method');
-            $table->string('api_version')->nullable();
-            $table->timestamp('request_at');
-            $table->timestamp('response_at')->nullable();
-            $table->integer('response_status')->nullable();
-            $table->boolean('is_error')->default(false);
-            $table->timestamps();
+        // CONVERGENT guard (rushing/laravel-schema-convergence/docs/agents/convergent-migration-guards.convention.md):
+        // create when absent, top up when a copy already exists, throw when one exists with an
+        // incompatible column type.
+        ConvergentTable::named('request_logs')
+            ->define(function (Blueprint $table) {
+                $table->uuid('id')->primary();
+                $table->string('request_id')->unique()->index();
+                $table->string('path');
+                $table->string('method');
+                $table->string('api_version')->nullable();
+                $table->timestamp('request_at');
+                $table->timestamp('response_at')->nullable();
+                $table->integer('response_status')->nullable();
+                $table->boolean('is_error')->default(false);
+                $table->timestamps();
 
-            // Indexes for common queries
-            $table->index(['path', 'method']);
-            $table->index('request_at');
-            $table->index('is_error');
-        });
+                // Indexes for common queries
+                $table->index(['path', 'method']);
+                $table->index('request_at');
+                $table->index('is_error');
+            })
+            ->assert();
     }
 
     /**

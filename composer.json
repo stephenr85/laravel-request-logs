@@ -8,6 +8,15 @@
             "name": "Stephen Rushing"
         }
     ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../laravel-schema-convergence",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require": {
         "php": "^8.2",
         "illuminate/contracts": "^11.0|^12.0|^13.0",
