@@ -8,3 +8,4 @@
 .phpunit.result.cache
 composer.lock
 CLAUDE.md
+composer.local.json

@@ -10,11 +10,8 @@
     ],
     "repositories": [
         {
-            "type": "path",
-            "url": "../laravel-schema-convergence",
-            "options": {
-                "symlink": true
-            }
+            "type": "git",
+            "url": "https://github.com/stephenr85/laravel-schema-convergence.git"
         }
     ],
     "require": {
@@ -33,7 +30,8 @@
         "laravel/pint": "^1.0",
         "orchestra/testbench": "^10.0|^11.0",
         "pestphp/pest": "^4.0",
-        "pestphp/pest-plugin-laravel": "^4.0"
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "wikimedia/composer-merge-plugin": "^2.1"
     },
     "suggest": {
         "guzzlehttp/guzzle": "Required only to log outbound HTTP calls via GuzzleRequestLogMiddleware (^7.0)."
@@ -56,12 +54,18 @@
             "providers": [
                 "Rushing\\RequestLogs\\RequestLogsServiceProvider"
             ]
+        },
+        "merge-plugin": {
+            "include": [
+                "composer.local.json"
+            ]
         }
     },
     "config": {
         "sort-packages": true,
         "allow-plugins": {
-            "pestphp/pest-plugin": true
+            "pestphp/pest-plugin": true,
+            "wikimedia/composer-merge-plugin": true
         }
     },
     "minimum-stability": "dev",
