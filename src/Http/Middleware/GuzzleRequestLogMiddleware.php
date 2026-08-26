@@ -13,6 +13,7 @@ use Rushing\RequestLogs\Events\CompleteRequestLogEvent;
 use Rushing\RequestLogs\Services\RequestLogCollector;
 use Rushing\RequestLogs\Services\RequestLogService;
 use Rushing\RequestLogs\Services\RequestLogTracker;
+use Rushing\RequestLogs\Support\BodyCapture;
 
 class GuzzleRequestLogMiddleware
 {
@@ -277,15 +278,9 @@ class GuzzleRequestLogMiddleware
             return [];
         }
 
-        // Try to decode a JSON request body.
-        $contentType = $request->getHeaderLine('Content-Type');
-        if (str_contains($contentType, 'application/json')) {
-            $decoded = json_decode($body, true);
-
-            return $decoded !== null ? $decoded : $body;
-        }
-
-        return $body;
+        // Non-text bodies are described, not captured — the log payload is queued and
+        // json_encode throws on malformed UTF-8. See BodyCapture.
+        return BodyCapture::capture($body, $request->getHeaderLine('Content-Type'));
     }
 
     /**
@@ -305,15 +300,9 @@ class GuzzleRequestLogMiddleware
             return [];
         }
 
-        // Try to decode a JSON response.
-        $contentType = $response->getHeaderLine('Content-Type');
-        if (str_contains($contentType, 'application/json')) {
-            $decoded = json_decode($body, true);
-
-            return $decoded !== null ? $decoded : $body;
-        }
-
-        return $body;
+        // Non-text bodies are described, not captured — an outbound call that downloads
+        // a file crashes the queue serializer identically to an inbound PDF export.
+        return BodyCapture::capture($body, $response->getHeaderLine('Content-Type'));
     }
 
     /**

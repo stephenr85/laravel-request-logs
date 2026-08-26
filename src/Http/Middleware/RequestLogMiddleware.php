@@ -10,7 +10,10 @@ use Rushing\RequestLogs\Data\RequestLogData;
 use Rushing\RequestLogs\Events\CompleteRequestLogEvent;
 use Rushing\RequestLogs\Services\RequestLogService;
 use Rushing\RequestLogs\Services\RequestLogTracker;
+use Rushing\RequestLogs\Support\BodyCapture;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RequestLogMiddleware
 {
@@ -129,7 +132,9 @@ class RequestLogMiddleware
             }
         });
 
-        return $body;
+        // A non-UTF-8 string field (a latin-1 form post) crashes the queue serializer
+        // exactly like a binary response body does — same defect, request axis.
+        return BodyCapture::scrub($body);
     }
 
     /**
@@ -255,18 +260,33 @@ class RequestLogMiddleware
 
     /**
      * Get the response body as an array or string.
+     *
+     * The completion event is queued, so whatever lands here is `json_encode`d by the
+     * queue serializer — and `json_encode` throws `InvalidPayloadException` on malformed
+     * UTF-8. Any binary-bodied route (a PDF export, an image, a zip) therefore used to
+     * kill the request AFTER the response had already been produced. A non-text body is
+     * described, never captured; see `BodyCapture`.
      */
     protected function getResponseBody(Response $response): mixed
     {
-        $content = $response->getContent();
+        $contentType = (string) $response->headers->get('Content-Type', '');
 
-        // Try to decode a JSON response.
-        if (str_contains($response->headers->get('Content-Type', ''), 'application/json')) {
-            $decoded = json_decode($content, true);
-
-            return $decoded !== null ? $decoded : $content;
+        // A file-backed or streamed response holds no in-memory content — `getContent()`
+        // returns false on both — so there is nothing to capture, only to describe.
+        if ($response instanceof BinaryFileResponse) {
+            return BodyCapture::describe($contentType, $response->getFile()->getSize() ?: null);
         }
 
-        return $content;
+        if ($response instanceof StreamedResponse) {
+            return BodyCapture::describe($contentType, null);
+        }
+
+        $content = $response->getContent();
+
+        if (! is_string($content)) {
+            return BodyCapture::describe($contentType, null);
+        }
+
+        return BodyCapture::capture($content, $contentType);
     }
 }
