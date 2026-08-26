@@ -8,7 +8,6 @@ use Rushing\RequestLogs\Redactors\CommonHeaderFieldsRedactor;
 use Rushing\RequestLogs\RequestLogsServiceProvider;
 use Spatie\LaravelData\LaravelDataServiceProvider;
 use Spatie\LaravelData\Mappers\CamelCaseMapper;
-use Spatie\LaravelData\Normalizers\ArrayNormalizer;
 
 class TestCase extends Orchestra
 {
@@ -52,16 +51,20 @@ class TestCase extends Orchestra
             'prefix' => '',
         ]);
 
-        // Configure spatie/laravel-data.
-        $app['config']->set('data.validation_strategy', 'always');
-        $app['config']->set('data.normalizers', [
-            ArrayNormalizer::class,
-        ]);
-        $app['config']->set('data.transformers', []);
-        $app['config']->set('data.casts', []);
-        $app['config']->set('data.rule_inferrers', []);
-        $app['config']->set('data.max_transformation_depth', 512);
-        $app['config']->set('data.throw_when_max_transformation_depth_reached', true);
+        // Configure spatie/laravel-data. This block USED to hand-roll seven `data.*` keys as a
+        // manual stand-in for the config no provider was supplying — and it diverged from the host
+        // in three of them, most damagingly `rule_inferrers => []`, which meant NOT ONE validation
+        // rule was ever inferred here and `getValidationRules()` returned near-empty arrays that
+        // read as passing. That is the same false green ticket 84 named, wearing a second face:
+        // the harness was not merely missing config, it was actively SHADOWING the provider's with
+        // a worse reconstruction. Now that LaravelDataServiceProvider boots, the reconstruction is
+        // deleted and only the two deliberate deltas below remain. api-surface-coherence 85.
+        //
+        // `validation_strategy => 'always'` went with it, and that one is worth naming. Both the
+        // host and the package default are `OnlyRequests`; `always` was a stricter regime the
+        // harness invented and NO host runs. It was inert only because `rule_inferrers` was empty
+        // — restore the inferrers and it fails six pre-existing tests on `from()` calls that are
+        // perfectly legal in production. Two wrong settings cancelling out is not a green suite.
 
         // Booting LaravelDataServiceProvider alone would be a FALSE GREEN. The package ships
         // `name_mapping_strategy.input => null` (measured here before the fix), but the only
