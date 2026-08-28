@@ -6,6 +6,5 @@
 /.DS_Store
 /.ignore/
 .phpunit.result.cache
-composer.lock
 CLAUDE.md
 composer.local.json
