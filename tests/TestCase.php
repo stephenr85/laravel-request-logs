@@ -3,6 +3,7 @@
 namespace Rushing\RequestLogs\Tests;
 
 use Orchestra\Testbench\TestCase as Orchestra;
+use Rushing\Popcorn\Laravel\PopcornServiceProvider;
 use Rushing\RequestLogs\Redactors\CommonBodyFieldsRedactor;
 use Rushing\RequestLogs\Redactors\CommonHeaderFieldsRedactor;
 use Rushing\RequestLogs\RequestLogsServiceProvider;
@@ -25,6 +26,12 @@ class TestCase extends Orchestra
             // defaults UNDER the explicit sets below, so those still win.
             // api-surface-coherence tickets 84/85.
             LaravelDataServiceProvider::class,
+
+            // Same reason, second instance: `RequestLogPipelineManager` declares `#[IsRegistry]` and
+            // the RegistryIndex binding lives in `rushing/laravel-popcorn`, which testbench will not
+            // discover. Without this the index is auto-resolvable but UNSHARED, so every index
+            // assertion in this package would pass over a throwaway object. registry-kernel 38.
+            PopcornServiceProvider::class,
 
             RequestLogsServiceProvider::class,
         ];

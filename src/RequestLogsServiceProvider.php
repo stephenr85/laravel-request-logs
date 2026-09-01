@@ -45,7 +45,7 @@ class RequestLogsServiceProvider extends PackageServiceProvider
             $manager = new RequestLogPipelineManager;
 
             $channels = $app['config']->get('request-logs.channels', []);
-            $manager->loadChannels($channels);
+            $manager->loadChannels($channels, by: 'config:request-logs.channels');
             $manager->registerProcessors();
 
             return $manager;
