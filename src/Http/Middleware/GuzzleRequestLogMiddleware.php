@@ -269,10 +269,14 @@ class GuzzleRequestLogMiddleware
         // Rewind after reading: casting a PSR-7 stream to string leaves the pointer at EOF,
         // so a client that reads the body after us (many SDKs do) would see an empty body.
         $stream = $request->getBody();
-        $body = (string) $stream;
-        if ($stream->isSeekable()) {
-            $stream->rewind();
+
+        // A non-seekable body can be read once, and the transport has not sent it yet.
+        if (! $stream->isSeekable()) {
+            return BodyCapture::describeStream($request->getHeaderLine('Content-Type'));
         }
+
+        $body = (string) $stream;
+        $stream->rewind();
 
         if (empty($body)) {
             return [];
@@ -291,10 +295,15 @@ class GuzzleRequestLogMiddleware
         // Rewind after reading: casting a PSR-7 stream to string leaves the pointer at EOF,
         // so a client that reads the body after us (many SDKs do) would see an empty body.
         $stream = $response->getBody();
-        $body = (string) $stream;
-        if ($stream->isSeekable()) {
-            $stream->rewind();
+
+        // A non-seekable body (Guzzle `stream => true` — an SSE completion) can be read once, and the
+        // caller has not read it yet. Describe it; reading it here hands the caller EOF.
+        if (! $stream->isSeekable()) {
+            return BodyCapture::describeStream($response->getHeaderLine('Content-Type'));
         }
+
+        $body = (string) $stream;
+        $stream->rewind();
 
         if (empty($body)) {
             return [];

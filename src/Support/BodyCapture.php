@@ -94,6 +94,22 @@ class BodyCapture
     }
 
     /**
+     * The stand-in a NON-SEEKABLE body is logged as. Such a body (Guzzle `stream => true`, a
+     * streamed upload) can be read exactly once and the caller has not read it yet — reading it
+     * here to log it hands the caller EOF. Measured at the flagship on Prism's OpenAI SSE stream:
+     * every chat reply committed empty while every suite stayed green (file-handling 11).
+     *
+     * @return array<string, mixed>
+     */
+    public static function describeStream(string $contentType): array
+    {
+        return [
+            '__stream__' => true,
+            'mime' => trim(strtok($contentType, ';') ?: '') ?: null,
+        ];
+    }
+
+    /**
      * Scrub any non-UTF-8 string out of an already-decoded body array. A latin-1 form
      * field crashes the queue serializer exactly like a PDF does.
      *
