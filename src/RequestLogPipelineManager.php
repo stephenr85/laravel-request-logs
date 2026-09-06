@@ -11,7 +11,6 @@ use Rushing\Popcorn\Registries\IsRegistry;
 use Rushing\Popcorn\Registries\OnDuplicate;
 use Rushing\Popcorn\Registries\Optionality;
 use Rushing\Popcorn\Registries\Registry;
-use Rushing\Popcorn\Registries\RegistryArity;
 use Rushing\Popcorn\Registries\RegistryKey;
 use Rushing\RequestLogs\Contracts\RedactorInterface;
 use Rushing\RequestLogs\Data\RequestLogData;
@@ -21,7 +20,7 @@ use Rushing\RequestLogs\Processors\RequestLogProcessor;
  * The map of Laravel log-channel name → the redactor pipeline that channel runs.
  *
  * Every configured channel receives every request log; the redactors under a channel decide what that
- * particular destination is allowed to see. That is a `RunAll` read: `log()` and `registerProcessors()`
+ * particular destination is allowed to see. Both methods enumerate channels: `log()` and `registerProcessors()`
  * engage the whole registry, never one entry.
  *
  * ## Declared, as of registry-kernel 38's sweep
@@ -52,15 +51,10 @@ use Rushing\RequestLogs\Processors\RequestLogProcessor;
  */
 #[IsRegistry(
     root: 'request-logs.channels',
-    of: 'log channels that receive request logs — one redactor pipeline per Laravel log channel',
-    arity: RegistryArity::RunAll,
     entryType: 'list<class-string<RedactorInterface>|array{0: class-string<RedactorInterface>, 1: array}>',
     onDuplicate: OnDuplicate::Supersede,
     optionality: Optionality::Optional,
-    note: 'Supersede is the behaviour this class has always had: addChannel() was a plain array '
-        .'assignment, so a second channel of the same name replaced the first silently. The entry is a '
-        .'LIST of redactors rather than one redactor, because a channel runs a pipeline — so the arity '
-        .'is RunAll over the channels, not over the redactors, which the RequestLogProcessor composes.',
+    description: 'Request-log channels, each holding an ordered redactor pipeline. Registering the same channel replaces its pipeline. Logging visits every channel; RequestLogProcessor composes the redactors for each destination.',
 )]
 /**
  * @implements Registry<list<class-string<RedactorInterface>|array{0: class-string<RedactorInterface>, 1: array}>>
