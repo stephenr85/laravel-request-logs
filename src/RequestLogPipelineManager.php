@@ -8,8 +8,8 @@ use Rushing\Popcorn\Registries\BasicRegistry;
 use Rushing\Popcorn\Registries\Forgettable;
 use Rushing\Popcorn\Registries\Gated;
 use Rushing\Popcorn\Registries\IsRegistry;
-use Rushing\Popcorn\Registries\OnDuplicate;
-use Rushing\Popcorn\Registries\Optionality;
+use Rushing\Popcorn\Registries\OnKeyDuplicate;
+use Rushing\Popcorn\Registries\PopulationRequirement;
 use Rushing\Popcorn\Registries\Registry;
 use Rushing\Popcorn\Registries\RegistryKey;
 use Rushing\RequestLogs\Contracts\RedactorInterface;
@@ -52,8 +52,8 @@ use Rushing\RequestLogs\Processors\RequestLogProcessor;
 #[IsRegistry(
     root: 'request-logs.channels',
     entryType: 'list<class-string<RedactorInterface>|array{0: class-string<RedactorInterface>, 1: array}>',
-    onDuplicate: OnDuplicate::Supersede,
-    optionality: Optionality::Optional,
+    onKeyDuplicate: OnKeyDuplicate::Supersede,
+    populationRequirement: PopulationRequirement::Optional,
     description: 'Request-log channels, each holding an ordered redactor pipeline. Registering the same channel replaces its pipeline. Logging visits every channel; RequestLogProcessor composes the redactors for each destination.',
 )]
 /**
