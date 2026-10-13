@@ -24,7 +24,8 @@ function loginExchange(): array
                 'email' => 'person@example.test',
                 'password' => 'request-password',
                 'passwordConfirmation' => 'request-confirmation',
-                'profile' => ['security' => ['password' => 'nested-password', 'passwordConfirmation' => 'nested-confirmation']],
+                'currentPassword' => 'request-current-password',
+                'profile' => ['security' => ['password' => 'nested-password', 'passwordConfirmation' => 'nested-confirmation', 'currentPassword' => 'nested-current-password']],
             ],
             'headers' => ['content-type' => 'application/json'],
         ],
@@ -53,7 +54,9 @@ it('redacts a login response\'s nested camel tokens and nested camel password ke
         ->and(data_get($result, 'request.body.password'))->toBe('[REDACTED]')
         ->and(data_get($result, 'request.body.passwordConfirmation'))->toBe('[REDACTED]')
         ->and(data_get($result, 'request.body.profile.security.password'))->toBe('[REDACTED]')
-        ->and(data_get($result, 'request.body.profile.security.passwordConfirmation'))->toBe('[REDACTED]');
+        ->and(data_get($result, 'request.body.profile.security.passwordConfirmation'))->toBe('[REDACTED]')
+        ->and(data_get($result, 'request.body.currentPassword'))->toBe('[REDACTED]')
+        ->and(data_get($result, 'request.body.profile.security.currentPassword'))->toBe('[REDACTED]');
 
     // What is not a secret stays readable.
     expect(data_get($result, 'response.body.data.tokenType'))->toBe('Bearer')
@@ -67,7 +70,7 @@ it('keeps no secret value anywhere in a channel\'s processed log context (header
 
     $context = json_encode($processor($record)->context);
 
-    foreach (['access-token-value', 'refresh-token-value', 'plain-text-token-value', 'nested-token-value', 'request-password', 'request-confirmation', 'nested-password', 'nested-confirmation'] as $secret) {
+    foreach (['access-token-value', 'refresh-token-value', 'plain-text-token-value', 'nested-token-value', 'request-password', 'request-confirmation', 'nested-password', 'nested-confirmation', 'request-current-password', 'nested-current-password'] as $secret) {
         expect($context)->not->toContain($secret);
     }
     expect($context)->toContain('Bearer');
