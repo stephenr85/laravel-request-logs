@@ -37,6 +37,22 @@ class CommonBodyFieldsRedactor extends DotNotationRedactor
             'response.body.*.password',
             'response.body.*.token',
             'response.body.*.api_key',
+
+            // Any depth, camelCase included: a camel API nests its secrets (a login answers
+            // {data: {accessToken}}), which neither the top-level nor the one-level paths reach.
+            // `**` matches the key at the body's top level too.
+            'request.body.**.password',
+            'request.body.**.passwordConfirmation',
+            'request.body.**.token',
+            'request.body.**.accessToken',
+            'request.body.**.refreshToken',
+            'request.body.**.plainTextToken',
+            'response.body.**.password',
+            'response.body.**.passwordConfirmation',
+            'response.body.**.token',
+            'response.body.**.accessToken',
+            'response.body.**.refreshToken',
+            'response.body.**.plainTextToken',
         ];
 
         parent::__construct(
