@@ -2,64 +2,63 @@
 
 namespace Rushing\RequestLogs\Redactors;
 
+use Illuminate\Support\Str;
+
 class CommonBodyFieldsRedactor extends DotNotationRedactor
 {
+    /**
+     * The canonical secret body keys, written once in snake_case. Each is redacted in its snake AND camel spelling, at ANY
+     * depth (top level included), in both the request and the response body, so a new secret is one entry here rather
+     * than a hand-listed set of paths that drifts by casing or depth.
+     */
+    public const SECRET_KEYS = [
+        'password',
+        'password_confirmation',
+        'current_password',
+        'new_password',
+        'token',
+        'access_token',
+        'refresh_token',
+        'plain_text_token',
+        'auth_token',
+        'api_key',
+        'secret',
+        'client_secret',
+        'private_key',
+        'credentials',
+        'otp',
+        'recovery_code',
+        'two_factor_secret',
+    ];
+
     public function __construct(array $additionalPaths = [], string|\Closure $replacement = '[REDACTED]')
     {
-        $commonBodyPaths = [
-            // Request body fields
-            'request.body.password',
-            'request.body.password_confirmation',
-            'request.body.token',
-            'request.body.access_token',
-            'request.body.refresh_token',
-            'request.body.api_key',
-            'request.body.secret',
-            'request.body.private_key',
-            'request.body.credentials',
-            'request.body.auth_token',
-
-            // Response body fields
-            'response.body.password',
-            'response.body.token',
-            'response.body.access_token',
-            'response.body.refresh_token',
-            'response.body.api_key',
-            'response.body.secret',
-            'response.body.private_key',
-            'response.body.credentials',
-            'response.body.auth_token',
-
-            // Nested patterns with wildcards
-            'request.body.*.password',
-            'request.body.*.token',
-            'request.body.*.api_key',
-            'response.body.*.password',
-            'response.body.*.token',
-            'response.body.*.api_key',
-
-            // Any depth, camelCase included: a camel API nests its secrets (a login answers
-            // {data: {accessToken}}), which neither the top-level nor the one-level paths reach.
-            // `**` matches the key at the body's top level too.
-            'request.body.**.password',
-            'request.body.**.passwordConfirmation',
-            'request.body.**.currentPassword',
-            'request.body.**.token',
-            'request.body.**.accessToken',
-            'request.body.**.refreshToken',
-            'request.body.**.plainTextToken',
-            'response.body.**.password',
-            'response.body.**.passwordConfirmation',
-            'response.body.**.currentPassword',
-            'response.body.**.token',
-            'response.body.**.accessToken',
-            'response.body.**.refreshToken',
-            'response.body.**.plainTextToken',
-        ];
-
         parent::__construct(
-            array_merge($commonBodyPaths, $additionalPaths),
+            array_merge(self::paths(), $additionalPaths),
             $replacement
         );
+    }
+
+    /**
+     * `**` matches the key at the body's top level too.
+     *
+     * @return list<string>
+     */
+    public static function paths(): array
+    {
+        $keys = [];
+        foreach (self::SECRET_KEYS as $key) {
+            $keys[$key] = true;
+            $keys[Str::camel($key)] = true;
+        }
+
+        $paths = [];
+        foreach (['request.body', 'response.body'] as $body) {
+            foreach (array_keys($keys) as $key) {
+                $paths[] = "{$body}.**.{$key}";
+            }
+        }
+
+        return $paths;
     }
 }

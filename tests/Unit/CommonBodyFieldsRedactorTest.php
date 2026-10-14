@@ -75,3 +75,40 @@ it('keeps no secret value anywhere in a channel\'s processed log context (header
     }
     expect($context)->toContain('Bearer');
 });
+
+// Owner ruling 2026-10-14: every secret key, snake AND camel, at ANY depth, in request and response bodies. The matrix is
+// written here independently of CommonBodyFieldsRedactor::SECRET_KEYS, so dropping a key from the redactor fails a row.
+// It holds the keys the 10-14 live probe found unredacted plus the keys covered before.
+dataset('secret key matrix', function () {
+    $keys = [
+        'password', 'password_confirmation', 'current_password', 'new_password',
+        'token', 'access_token', 'refresh_token', 'plain_text_token', 'auth_token',
+        'api_key', 'secret', 'client_secret', 'private_key', 'credentials',
+        'otp', 'recovery_code', 'two_factor_secret',
+    ];
+
+    $rows = [];
+    foreach ($keys as $snake) {
+        foreach (array_unique([$snake, Illuminate\Support\Str::camel($snake)]) as $key) {
+            foreach (['request', 'response'] as $side) {
+                foreach (['top' => [], 'nested' => ['data', 'user'], 'in a list' => ['items', 0, 'auth']] as $depth => $prefix) {
+                    $rows["{$side} {$depth} {$key}"] = [$side, $prefix, $key];
+                }
+            }
+        }
+    }
+
+    return $rows;
+});
+
+it('redacts every secret key in both casings at any depth in both bodies', function (string $side, array $prefix, string $key) {
+    $body = [];
+    data_set($body, implode('.', [...$prefix, $key]), 'secret-value');
+    data_set($body, implode('.', [...$prefix, 'email']), 'person@example.test');
+
+    $result = (new CommonBodyFieldsRedactor)->handle([$side => ['body' => $body]], fn ($data) => $data);
+
+    $at = implode('.', [$side, 'body', ...$prefix]);
+    expect(data_get($result, "{$at}.{$key}"))->toBe('[REDACTED]')
+        ->and(data_get($result, "{$at}.email"))->toBe('person@example.test');
+})->with('secret key matrix');

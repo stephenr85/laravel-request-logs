@@ -113,7 +113,9 @@ new DotNotationRedactor(
 
 `CommonHeaderFieldsRedactor` and `CommonBodyFieldsRedactor` extend it with sensible
 defaults (auth headers, cookies, passwords, tokens, api keys, …) and accept
-`$additionalPaths` in their constructor. Write your own domain redactors (PCI, HIPAA,
+`$additionalPaths` in their constructor. `CommonBodyFieldsRedactor` reads one canonical
+key list (`CommonBodyFieldsRedactor::SECRET_KEYS`, snake_case) and redacts each key in its
+snake and camel spelling at any depth of the request and response bodies. Write your own domain redactors (PCI, HIPAA,
 PII) by extending `DotNotationRedactor`, or implement
 `Rushing\RequestLogs\Contracts\RedactorInterface` (`handle($data, $next)`) directly.
 
