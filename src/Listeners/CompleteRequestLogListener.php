@@ -57,6 +57,9 @@ class CompleteRequestLogListener implements ShouldQueue
 
         foreach ($modelsByClass as $modelClass => $modelIds) {
             try {
+                // Trackers may store a morph-map alias rather than a class name.
+                $modelClass = Relation::getMorphedModel($modelClass) ?? $modelClass;
+
                 // Verify models exist before attaching.
                 $keyName = $modelClass::make()->getKeyName();
                 $existingIds = $modelClass::whereIn($keyName, $modelIds)->pluck($keyName)->toArray();
@@ -86,7 +89,7 @@ class CompleteRequestLogListener implements ShouldQueue
                         'updated_at' => $now,
                     ];
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Error preparing models for bulk association: '.$e->getMessage(), [
                     'request_id' => $event->requestId,
                     'model_class' => $modelClass,
@@ -106,7 +109,7 @@ class CompleteRequestLogListener implements ShouldQueue
                     ['request_log_id', 'model_type', 'model_id'], // Unique keys
                     ['updated_at'] // Update the timestamp on conflict
                 );
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Error bulk upserting model associations: '.$e->getMessage(), [
                     'request_id' => $event->requestId,
                     'exception' => $e,
@@ -122,7 +125,7 @@ class CompleteRequestLogListener implements ShouldQueue
             try {
                 $pipelineManager = app(RequestLogPipelineManager::class);
                 $pipelineManager->log($event->requestLogData);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Error logging request data through pipelines: '.$e->getMessage(), [
                     'request_id' => $event->requestId,
                     'exception' => $e,

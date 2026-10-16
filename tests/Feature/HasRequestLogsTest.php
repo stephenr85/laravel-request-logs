@@ -72,3 +72,58 @@ test('nothing is tracked when the request has no correlation header', function (
     $tracker = app(RequestLogTracker::class);
     expect($tracker->getRequestIds())->toBeEmpty();
 });
+
+test('the listener resolves a tracked morph alias and preserves the stored morph type', function () {
+    $map = Illuminate\Database\Eloquent\Relations\Relation::morphMap();
+    Illuminate\Database\Eloquent\Relations\Relation::morphMap(['hook' => TestModel::class]);
+
+    try {
+        $model = TestModel::create(['name' => 'aliased']);
+        $tracker = app(RequestLogTracker::class);
+        $tracker->clearAll();
+        $tracker->addModel($this->correlationId, 'hook', $model->getKey());
+        $requestLog = RequestLog::create([
+            'request_id' => $this->correlationId,
+            'path' => 'api/test', 'method' => 'POST', 'api_version' => 'default',
+            'request_at' => now(), 'response_at' => now(),
+            'response_status' => 200, 'is_error' => false,
+        ]);
+
+        (new CompleteRequestLogListener)->handle(new CompleteRequestLogEvent(
+            $this->correlationId, $requestLog->id, $tracker,
+        ));
+
+        $this->assertDatabaseHas('request_log_models', [
+            'request_log_id' => $requestLog->id,
+            'model_type' => 'hook', 'model_id' => $model->getKey(),
+        ]);
+        expect($tracker->getRequestIds())->toBeEmpty();
+    } finally {
+        Illuminate\Database\Eloquent\Relations\Relation::morphMap($map, false);
+    }
+});
+
+test('an invalid tracked class cannot escape the logging listener as an Error', function () {
+    $model = TestModel::create(['name' => 'valid']);
+    $tracker = app(RequestLogTracker::class);
+    $tracker->addModel($this->correlationId, 'MissingRequestLogTrackedClass', 'missing');
+    $requestLog = RequestLog::create([
+        'request_id' => $this->correlationId,
+        'path' => 'api/test', 'method' => 'POST', 'api_version' => 'default',
+        'request_at' => now(), 'response_at' => now(),
+        'response_status' => 200, 'is_error' => false,
+    ]);
+
+    Illuminate\Support\Facades\Log::shouldReceive('error')->once()
+        ->withArgs(fn ($message, $context) => str_contains($message, 'Error preparing models')
+            && $context['exception'] instanceof Error);
+    (new CompleteRequestLogListener)->handle(new CompleteRequestLogEvent(
+        $this->correlationId, $requestLog->id, $tracker,
+    ));
+
+    $this->assertDatabaseHas('request_log_models', [
+        'request_log_id' => $requestLog->id,
+        'model_type' => TestModel::class, 'model_id' => $model->getKey(),
+    ]);
+    expect($tracker->getRequestIds())->toBeEmpty();
+});
