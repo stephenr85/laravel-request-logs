@@ -1,0 +1,77 @@
+---
+title: Request-log channels
+segment: request-logs.channels
+nav_order: 100
+excerpt: The log channels every request log is written to, each with its own ordered redaction pipeline.
+---
+
+# Request-log channels
+
+`request-logs.channels` maps a **Laravel log channel name** to the **redaction pipeline** that
+channel runs. Every request log, inbound or outbound, is written to every registered channel, and
+each channel's redactors decide what that destination is allowed to see. One channel can keep the
+raw payload for a short-retention debug store while another strips secrets before anything leaves
+the process.
+
+Each entry is an ordered list of redactors: a `RedactorInterface` class name, a `[class, ...args]`
+tuple, or an instance. The channel name must also be defined in `config/logging.php`.
+
+{/* registry-facts:start — generated from the #[IsRegistry] declaration by `splicewire:beam:docs:registries:scaffold`. Rerun the command; do not edit between these markers. */}
+
+- **Root:** `request-logs.channels`
+- **Entries:** `list<class-string<RedactorInterface>|array{0: class-string<RedactorInterface>, 1: array}>`
+- **Duplicate keys:** Supersede — a later registration under a taken key replaces the earlier entry, in its place
+- **Population:** Optional — an empty registry is normal
+- **Order:** `100` (display order, ascending)
+- **Declared by:** `Rushing\RequestLogs\RequestLogPipelineManager`
+
+{/* registry-facts:end */}
+
+## Configuring channels
+
+Channels normally come from `config('request-logs.channels')`. The published config ships two:
+
+```php
+'channels' => [
+    'request_logs_raw' => [],
+
+    'request_logs_redacted' => [
+        \Rushing\RequestLogs\Redactors\CommonHeaderFieldsRedactor::class,
+        \Rushing\RequestLogs\Redactors\CommonBodyFieldsRedactor::class,
+    ],
+],
+```
+
+When the package builds its `RequestLogPipelineManager`, it loads this map and attaches each
+channel's pipeline to that Monolog channel as a processor. Because redaction runs as a processor on
+the channel itself, anything else logged to that channel is redacted too.
+
+## Adding a channel in code
+
+`addChannel('audit_logs', [MyPciRedactor::class])`, or `register()` with the same arguments, adds
+or replaces a channel at runtime. Processors are attached when the manager is built, so a channel
+added afterwards is logged to straight away, but its redactors aren't applied until
+`registerProcessors()` runs. Prefer config for any channel that must be redacted from the first
+request.
+
+`loadChannels($map)` replaces every registered channel with a new map, and `forget('audit_logs')`
+removes one.
+
+## Keys
+
+A channel name becomes the key under `request-logs.channels`, so it has to be a legal key:
+lowercase letters and digits, with `-`, `_` or `:` between them. `request_logs_redacted` is fine; a
+name with capitals or spaces throws when it's registered. `getChannels()` returns the whole map,
+keyed by channel name, in registration order.
+
+## Duplicates
+
+The policy is **supersede**: registering a channel that's already there replaces its whole
+pipeline. Redactors aren't merged.
+
+## Going deeper
+
+The source is
+[`RequestLogPipelineManager`](https://github.com/stephenr85/laravel-request-logs/blob/main/src/RequestLogPipelineManager.php).
+The README's [redaction pipelines section](https://github.com/stephenr85/laravel-request-logs#redaction-pipelines)
+covers `DotNotationRedactor`, its wildcards and the shipped redactors.
