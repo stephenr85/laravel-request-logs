@@ -221,6 +221,14 @@ tenancy demands; the model and the association writes both resolve
   `RequestLogData`) to add payload columns, etc.
 - Listen to `CompleteRequestLogEvent` to hang custom processing off request completion.
 
+## Registries
+
+This package declares one registry:
+
+- [`request-logs.channels`](docs/registries/request-logs.channels.mdx): the log channels every request
+  log is written to, each with its own ordered redaction pipeline. The `channels` config described
+  under Redaction pipelines fills it.
+
 ## Testing
 
 ```bash
