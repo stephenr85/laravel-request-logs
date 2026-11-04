@@ -49,10 +49,11 @@ the channel itself, anything else logged to that channel is redacted too.
 ## Adding a channel in code
 
 `addChannel('audit_logs', [MyPciRedactor::class])`, or `register()` with the same arguments, adds
-or replaces a channel at runtime. Processors are attached when the manager is built, so a channel
-added afterwards is logged to straight away, but its redactors aren't applied until
-`registerProcessors()` runs. Prefer config for any channel that must be redacted from the first
-request.
+or replaces a channel at runtime. A channel added after the manager is built gets its processor at
+once, so it is redacted from its first record, the same as a configured one. Each channel carries one
+processor, which reads the channel's current pipeline when it writes a record, so replacing a
+channel's redactors takes effect on the next record. A channel you `forget()` keeps its processor but
+has no pipeline left, so anything still written to it directly passes through unredacted.
 
 `loadChannels($map)` replaces every registered channel with a new map, and `forget('audit_logs')`
 removes one.

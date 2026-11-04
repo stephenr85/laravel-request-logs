@@ -3,6 +3,7 @@
 namespace Rushing\RequestLogs;
 
 use Illuminate\Support\Facades\Log;
+use Monolog\LogRecord;
 use Rushing\Popcorn\Registries\Authorizer;
 use Rushing\Popcorn\Registries\BasicRegistry;
 use Rushing\Popcorn\Registries\Forgettable;
@@ -15,6 +16,7 @@ use Rushing\Popcorn\Registries\RegistryKey;
 use Rushing\RequestLogs\Contracts\RedactorInterface;
 use Rushing\RequestLogs\Data\RequestLogData;
 use Rushing\RequestLogs\Processors\RequestLogProcessor;
+use WeakMap;
 
 /**
  * The map of Laravel log-channel name → the redactor pipeline that channel runs.
@@ -64,9 +66,24 @@ class RequestLogPipelineManager implements Forgettable, Gated, Registry
     /** @var BasicRegistry<list<class-string<RedactorInterface>|array{0: class-string<RedactorInterface>, 1: array}>> */
     private BasicRegistry $channels;
 
+    /**
+     * Whether {@see registerProcessors()} has run. From then on every registration attaches its channel's
+     * processor itself, so a channel added later is redacted from its first record.
+     */
+    private bool $processorsLive = false;
+
+    /**
+     * The Monolog loggers already carrying this manager's processor, keyed by the logger object, so a channel
+     * is attached once however often {@see registerProcessors()} runs, and again if Laravel rebuilds it.
+     *
+     * @var WeakMap<object, true>
+     */
+    private WeakMap $attached;
+
     public function __construct()
     {
         $this->channels = BasicRegistry::for($this);
+        $this->attached = new WeakMap;
     }
 
     /**
@@ -88,6 +105,8 @@ class RequestLogPipelineManager implements Forgettable, Gated, Registry
             $this->channels->register((string) $channelName, $redactors, $by);
         }
 
+        $this->attachIfLive();
+
         return $this;
     }
 
@@ -100,6 +119,7 @@ class RequestLogPipelineManager implements Forgettable, Gated, Registry
     public function addChannel(string $channelName, array $redactors = [], ?string $by = null): self
     {
         $this->channels->register($channelName, $redactors, $by);
+        $this->attachIfLive();
 
         return $this;
     }
@@ -113,6 +133,7 @@ class RequestLogPipelineManager implements Forgettable, Gated, Registry
     public function register(RegistryKey|string $key, mixed $entry = null, ?string $by = null, ?string $ability = null): static
     {
         $this->channels->register($key, $entry ?? [], $by, $ability);
+        $this->attachIfLive();
 
         return $this;
     }
@@ -172,12 +193,33 @@ class RequestLogPipelineManager implements Forgettable, Gated, Registry
 
     /**
      * Register redaction processors on the configured log channels.
+     *
+     * Each channel gets one processor, which reads that channel's pipeline when a record is written, so a
+     * pipeline replaced later is the one that runs. After the first call, every registration attaches its own
+     * channel, and calling this again attaches nothing twice.
      */
     public function registerProcessors(): void
     {
-        foreach ($this->getChannels() as $channelName => $redactors) {
-            $processor = new RequestLogProcessor($redactors);
-            Log::channel($channelName)?->getLogger()->pushProcessor($processor);
+        $this->processorsLive = true;
+
+        foreach (array_keys($this->getChannels()) as $channelName) {
+            $logger = Log::channel($channelName)?->getLogger();
+
+            if ($logger === null || isset($this->attached[$logger])) {
+                continue;
+            }
+
+            $logger->pushProcessor(fn (LogRecord $record): LogRecord => (new RequestLogProcessor(
+                $this->channels->tryResolve($channelName) ?? []
+            ))($record));
+            $this->attached[$logger] = true;
+        }
+    }
+
+    private function attachIfLive(): void
+    {
+        if ($this->processorsLive) {
+            $this->registerProcessors();
         }
     }
 
