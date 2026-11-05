@@ -3,6 +3,7 @@
 namespace Rushing\RequestLogs;
 
 use Illuminate\Support\Facades\Event;
+use Rushing\Popcorn\Registries\ScopesRegistrant;
 use Rushing\RequestLogs\Data\RequestLogData;
 use Rushing\RequestLogs\Events\CompleteRequestLogEvent;
 use Rushing\RequestLogs\Http\Middleware\GuzzleRequestLogMiddleware;
@@ -15,6 +16,14 @@ use Spatie\LaravelPackageTools\PackageServiceProvider;
 
 class RequestLogsServiceProvider extends PackageServiceProvider
 {
+    use ScopesRegistrant;
+
+    /** Every registry write in register()/boot() that names no `$by` records this package. */
+    protected function registrant(): string
+    {
+        return 'rushing/laravel-request-logs';
+    }
+
     public function configurePackage(Package $package): void
     {
         $package
